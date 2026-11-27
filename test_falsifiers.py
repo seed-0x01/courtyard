@@ -45,6 +45,27 @@ def test_fixture_source_mutation_changes_countdown():
     print("PASS fixture: mutated temp board + temp GitHub source changed both countdowns")
 
 
+def test_elapsed_source_reads_as_negative_days_left():
+    """A past kill is elapsed (negative days_left) at the SOURCE layer; a source
+    mutation to the future and back to the past flips the sign with the SAME clock.
+    The browser label derives from this, never from a typed number."""
+    d = tempfile.mkdtemp()
+    db = os.path.join(d, "board.db")
+    now = 1795798800  # fixed clock: 2026-11-27T09:00:00Z
+    fetch = lambda url: [{"body": "falsifier ends 2026-12-01"}]
+    make_db(db, "2026-11-26T11:23:31Z")  # elapsed
+    e1 = F.snapshot(db=db, fetch=fetch, now=now)["falsifiers"][0]
+    make_db(db, "2026-12-01T00:00:00Z")  # future
+    e2 = F.snapshot(db=db, fetch=fetch, now=now)["falsifiers"][0]
+    make_db(db, "2026-11-26T11:23:31Z")  # elapsed again
+    e3 = F.snapshot(db=db, fetch=fetch, now=now)["falsifiers"][0]
+    assert e1["days_left"] < 0 < e2["days_left"] and e3["days_left"] < 0, (e1, e2, e3)
+    assert e1["kill_utc"] == e3["kill_utc"] == "2026-11-26T11:23:31Z"
+    print("PASS fixture: source elapsed->future->elapsed flipped days_left sign " +
+          str(e1["days_left"]) + " -> " + str(e2["days_left"]) + " -> " + str(e3["days_left"]) +
+          " with an unchanged clock")
+
+
 def test_unreachable_source_is_never_invented():
     d = tempfile.mkdtemp()
     db = os.path.join(d, "board.db")
@@ -59,6 +80,7 @@ def test_unreachable_source_is_never_invented():
 
 if __name__ == "__main__":
     test_fixture_source_mutation_changes_countdown()
+    test_elapsed_source_reads_as_negative_days_left()
     test_unreachable_source_is_never_invented()
     live = F.snapshot()
     for f in live["falsifiers"]:
